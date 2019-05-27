@@ -65,6 +65,7 @@ int score;
 int bricknum;
 int start;
 int hbrick = 8;
+int HoldTrig = 1;
 
 void main()
 {
@@ -74,11 +75,11 @@ void main()
 
 	do {              //½ÃÀÛÈ­¸é Ç¥½Ã
 		setcursortype(NOCURSOR);          //Ä¿¼­ ¾ø¾Ú
-		gotoxy(27, 9); printf("¦®¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¯");
+		gotoxy(27, 9); printf("¦®¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¯");
 		gotoxy(27, 10); printf("¦­      ´ºÅ×Æ®¸®½º      ¦­");
 		gotoxy(27, 11); printf("¦­                      ¦­");
 		gotoxy(27, 12); printf("¦­ °ÔÀÓ½ÃÀÛ-> space bar ¦­");
-		gotoxy(27, 13); printf("¦±¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦°");
+		gotoxy(27, 13); printf("¦±¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦°");
 		start = getch();
 	} while (start != 32);
 
@@ -171,6 +172,7 @@ void DrawBoard()         //°ÔÀÓÆÇÀ» ±×¸²(¿ÜºÎº®°ú ¹®ÀÚ¿­ »©°í ½×¿©ÀÖ´Â º®µ¹¸¸ ±×
 BOOL ProcessKey()          // Å°ÀÔ·ÂÀ» Ã³¸®ÇÏ´Âµ¥ mainÇÔ¼öÀÇ ºÎ´ãÀ» ´ú¾îÁÖ±â À§ÇØ º°µµÀÇ ÇÔ¼ö·Î ºÐ¸®
 {                          // ÀÌµ¿ÁßÀÎ º®µ¹ÀÌ ¹Ù´Ú¿¡ ´êÀ¸¸é TRUE¸¦ ¸®ÅÏ
 	int ch, trot;
+	int xx, yy;
 
 	if (kbhit()) {
 		ch = getch();
@@ -233,17 +235,21 @@ BOOL ProcessKey()          // Å°ÀÔ·ÂÀ» Ã³¸®ÇÏ´Âµ¥ mainÇÔ¼öÀÇ ºÎ´ãÀ» ´ú¾îÁÖ±â À§Ç
 				break;
 			case 'z':
 				trot = (rot == 3 ? 0 : rot + 1);
-				if (GetAroundSpin(nx, ny, brick, trot) == EMPTY) {
+				if (GetAroundSpin(nx, ny, brick, trot, &xx, &yy) == EMPTY) {
 					PrintBrick(FALSE);
 					rot = trot;
+					nx = xx;
+					ny = yy;
 					PrintBrick(TRUE);
 				}
 				break;
 			case 'x':
-				trot = (rot == 3 ? 0 : rot - 1);
-				if (GetAroundSpin(nx, ny, brick, trot) == EMPTY) {
+				trot = (rot == 0 ? 3 : rot - 1);
+				if (GetAroundSpin(nx, ny, brick, trot, &xx, &yy) == EMPTY) {
 					PrintBrick(FALSE);
 					rot = trot;
+					nx = xx;
+					ny = yy;
 					PrintBrick(TRUE);
 				}
 				break;
@@ -288,7 +294,7 @@ int GetAround(int x, int y, int b, int r)   //º®µ¹ ÁÖ¸é¿¡ ¹«¾ùÀÌ ÀÖ´ÂÁö °Ë»çÇÏ¿©
 	return k;
 }
 
-int GetAroundSpin(int x, int y, int b, int r, int* xx, int* yy)
+int GetAroundSpin(int x, int y, int b, int r, int* retx, int* rety)
 {
 	int i;
 	for (int j = 0; j < 9; j++) {
@@ -298,8 +304,11 @@ int GetAroundSpin(int x, int y, int b, int r, int* xx, int* yy)
 		for (i = 0; i < 4; i++) {
 			k = max(k, board[x + Shape[b][r][i].x][y + Shape[b][r][i].y]);
 		}
-		if (k == EMPTY)
+		if (k == EMPTY) {
+			*retx = xx;
+			*rety = yy;
 			return EMPTY;
+		}
 	}
 	return !EMPTY;
 }
@@ -307,6 +316,7 @@ int GetAroundSpin(int x, int y, int b, int r, int* xx, int* yy)
 BOOL MoveDown()   //º®µ¹À» ÇÑÄ­ ¾Æ·¡·Î ÀÌµ¿½ÃÅ²´Ù.
 {
 	if (GetAround(nx, ny + 1, brick, rot) != EMPTY) {
+		HoldTrig = 1;
 		TestFull();
 		return TRUE;                 //¸¸¾à ¹Ù´Ú¿¡ ´ê¾Ò´Ù¸é TestFull ÇÔ¼ö¸¦ È£ÃâÇÑ ÈÄ TRUE¸¦ ¸®ÅÏÇÑ´Ù.
 	}
@@ -372,34 +382,36 @@ void PrintInfo()          //Á¡¼ö¿Í º®µ¹ÀÇ°¹¼ö¸¦ ³ªÅ¸³»´Â ÇÔ¼ö
 }
 
 void HoldBrick() { //ºí·°À» È¦µåÇÑ´Ù
+	if (HoldTrig == 1) {
+		int temp = 0, i = 0;
+		if (hbrick == 8)
+		{
+			temp = brick;
+			hbrick = random(sizeof(Shape) / sizeof(Shape[0]));
+			brick = hbrick;
+			hbrick = temp;
 
-	int temp = 0, i = 0;
-	if (hbrick == 8)
-	{
-		temp = brick;
-		hbrick = random(sizeof(Shape) / sizeof(Shape[0]));
-		brick = hbrick;
-		hbrick = temp;
-
-		nx = BW / 2;
-		ny = 3;
-		for (i = 0; i < 4; i++) {
-			gotoxy(BX + (Shape[brick][rot][i].x + nx) * 2, BY + Shape[brick][rot][i].y + ny);
-			puts(arTile[ttype][BRICK]);
+			nx = BW / 2;
+			ny = 3;
+			for (i = 0; i < 4; i++) {
+				gotoxy(BX + (Shape[brick][rot][i].x + nx) * 2, BY + Shape[brick][rot][i].y + ny);
+				puts(arTile[ttype][BRICK]);
+			}
 		}
-	}
-	else
-	{
-		temp = brick;
-		brick = hbrick;
-		hbrick = temp;
+		else
+		{
+			temp = brick;
+			brick = hbrick;
+			hbrick = temp;
 
-		nx = BW / 2;
-		ny = 3;
-		for (i = 0; i < 4; i++) {
-			gotoxy(BX + (Shape[brick][rot][i].x + nx) * 2, BY + Shape[brick][rot][i].y + ny);
-			puts(arTile[ttype][BRICK]);
+			nx = BW / 2;
+			ny = 3;
+			for (i = 0; i < 4; i++) {
+				gotoxy(BX + (Shape[brick][rot][i].x + nx) * 2, BY + Shape[brick][rot][i].y + ny);
+				puts(arTile[ttype][BRICK]);
+			}
 		}
+		HoldTrig = 0;
 	}
 }
 
