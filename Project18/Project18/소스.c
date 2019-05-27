@@ -302,7 +302,7 @@ int GetAroundSpin(int x, int y, int b, int r, int* retx, int* rety)
 		int xx = spinCenter[j][0] + x;
 		int yy = spinCenter[j][1] + y;
 		for (i = 0; i < 4; i++) {
-			k = max(k, board[x + Shape[b][r][i].x][y + Shape[b][r][i].y]);
+			k = max(k, board[xx + Shape[b][r][i].x][yy + Shape[b][r][i].y]);
 		}
 		if (k == EMPTY) {
 			*retx = xx;
