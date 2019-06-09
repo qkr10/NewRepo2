@@ -1,4 +1,4 @@
-#include "Tetris.h"
+ï»¿#include "Tetris.h"
 
 #define LEFT 75
 #define RIGHT 77
@@ -12,6 +12,7 @@
 #define PGUP 73
 #define PGDN 81
 #define HOLD 104
+#define DO_SUFFLE -1
 
 
 void DrawScreen();
@@ -26,11 +27,14 @@ void DrawNext();
 void PrintInfo();
 void HoldBrick();
 void HoldScreen();
+__inline void swap(int *a, int *b) {int temp = *a;*a = *b;*b = temp;}
+void Shuffle();
+int GetNextBrick(int previousBrick);
 
 struct Point {
 	int x, y;
 };
-struct Point Shape[][4][4] = {     //Shape[º®µ¹¸ğ¾ç][º®µ¹ÀÇÈ¸Àü][x,yÁÂÇ¥°ª]
+struct Point Shape[][4][4] = {     //Shape[ë²½ëŒëª¨ì–‘][ë²½ëŒì˜íšŒì „][x,yì¢Œí‘œê°’]
 	{ {0,0,1,0,2,0,-1,0}, {0,0,0,1,0,-1,0,-2}, {0,0,1,0,2,0,-1,0}, {0,0,0,1,0,-1,0,-2} },
 	{ {0,0,1,0,0,1,1,1}, {0,0,1,0,0,1,1,1}, {0,0,1,0,0,1,1,1}, {0,0,1,0,0,1,1,1} },
 	{ {0,0,-1,0,0,-1,1,-1}, {0,0,0,1,-1,0,-1,-1}, {0,0,-1,0,0,-1,1,-1}, {0,0,0,1,-1,0,-1,-1} },
@@ -39,23 +43,27 @@ struct Point Shape[][4][4] = {     //Shape[º®µ¹¸ğ¾ç][º®µ¹ÀÇÈ¸Àü][x,yÁÂÇ¥°ª]
 	{ {0,0,1,0,-1,0,1,-1}, {0,0,0,1,0,-1,-1,-1}, {0,0,1,0,-1,0,-1,1}, {0,0,0,-1,0,1,1,1} },
 	{ {0,0,-1,0,1,0,0,1}, {0,0,0,-1,0,1,1,0}, {0,0,-1,0,1,0,0,-1}, {0,0,-1,0,0,-1,0,1} },
 
-};         //±¸Á¶Ã¼ 3Â÷¿ø ¹è¿­À¸·Î º®µ¹¸ğ¾çÀ» Ç¥ÇöÇÑ´Ù
+};         //êµ¬ì¡°ì²´ 3ì°¨ì› ë°°ì—´ìœ¼ë¡œ ë²½ëŒëª¨ì–‘ì„ í‘œí˜„í•œë‹¤
 
 
 
 enum { EMPTY, BRICK, WALL };
-char *arTile[][3] = {             //Å×Æ®¸®½ºÀÇ ¸ğ¾çÀ» ¹Ù²ãÁØ´Ù
-	 {". ","¡á","¡à"},
-	 {"  ","¡á","¡à"},
+char *arTile[][3] = {             //í…ŒíŠ¸ë¦¬ìŠ¤ì˜ ëª¨ì–‘ì„ ë°”ê¿”ì¤€ë‹¤
+	 {". ","â– ","â–¡"},
+	 {"  ","â– ","â–¡"},
 	 {"  ","##","II"},
-	 {"  ","¡Ü","¢Ã"},
+	 {"  ","â—","â–£"},
 };
 
-int spinCenter[9][2] = {
-	{0, 0},
-	{1, 0},{-1, 0},{0, -1},{0, 1},
-	{1, 1},{-1, 1},{1, -1},{1, 1}
+int spinCenter[][2] = {
+	{0, 0},{1, 0},{-1, 0},
+	{0, 1},{1, 1},{-1, 1},
+	{0, 2},{1, 2},{-1, 2},
+	{0, -1}
 };
+
+int box[] = { 0, 1, 2, 3, 4, 5, 6 };
+
 int board[BW + 2][BH + 2];
 int nx, ny;
 int brick, rot;
@@ -66,6 +74,7 @@ int bricknum;
 int start;
 int hbrick = 8;
 int HoldTrig = 1;
+int DropTime = 1e+10;
 
 void main()
 {
@@ -73,41 +82,39 @@ void main()
 	int x, y;
 	start = 1;
 
-	do {              //½ÃÀÛÈ­¸é Ç¥½Ã
-		setcursortype(NOCURSOR);          //Ä¿¼­ ¾ø¾Ú
-		gotoxy(27, 9); printf("¦®¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¯");
-		gotoxy(27, 10); printf("¦­      ´ºÅ×Æ®¸®½º      ¦­");
-		gotoxy(27, 11); printf("¦­                      ¦­");
-		gotoxy(27, 12); printf("¦­ °ÔÀÓ½ÃÀÛ-> space bar ¦­");
-		gotoxy(27, 13); printf("¦±¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦¬¦°");
+	do {              //ì‹œì‘í™”ë©´ í‘œì‹œ
+		setcursortype(NOCURSOR);          //ì»¤ì„œ ì—†ì•°
+		gotoxy(27, 9); printf("â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”“");
+		gotoxy(27, 10); printf("â”ƒ      ë‰´í…ŒíŠ¸ë¦¬ìŠ¤      â”ƒ");
+		gotoxy(27, 11); printf("â”ƒ                      â”ƒ");
+		gotoxy(27, 12); printf("â”ƒ ê²Œì„ì‹œì‘-> space bar â”ƒ");
+		gotoxy(27, 13); printf("â”—â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”›");
 		start = getch();
 	} while (start != 32);
 
-
-
-	setcursortype(NOCURSOR);    //Ä¿¼­ ¾ø¾Ú
-	randomize();   //³­¼ö ¹ß»ı±â ÃÊ±âÈ­
+	setcursortype(NOCURSOR);    //ì»¤ì„œ ì—†ì•°
+	randomize();   //ë‚œìˆ˜ ë°œìƒê¸° ì´ˆê¸°í™”
 	for (; 3;) {
-		clrscr();     //È­¸éÀ» Áö¿ò
-		for (x = 0; x < BW + 2; x++) {       //BW´Â Å×Æ®¸®½ºÀÇ °¡·Î±æÀÌ
-			for (y = 0; y < BH + 2; y++) {      //BH´Â Å×Æ®¸®½ºÀÇ ¼¼·Î±æÀÌ
-				board[x][y] = (y == 0 || y == BH + 1 || x == 0 || x == BW + 1) ? WALL : EMPTY;    //board ¹è¿­¿¡ WALLÀÌ³ª EMPTY¸¦ ³ÖÀ½
+		clrscr();     //í™”ë©´ì„ ì§€ì›€
+		for (x = 0; x < BW + 2; x++) {       //BWëŠ” í…ŒíŠ¸ë¦¬ìŠ¤ì˜ ê°€ë¡œê¸¸ì´
+			for (y = 0; y < BH + 2; y++) {      //BHëŠ” í…ŒíŠ¸ë¦¬ìŠ¤ì˜ ì„¸ë¡œê¸¸ì´
+				board[x][y] = (y == 0 || y == BH + 1 || x == 0 || x == BW + 1) ? WALL : EMPTY;    //board ë°°ì—´ì— WALLì´ë‚˜ EMPTYë¥¼ ë„£ìŒ
 			}
-		}       //BW ¿Í BH´Â º®µ¹ÀÌ ½ÇÁ¦ ¿òÁ÷ÀÌ´Â °ø°£ÀÌ¹Ç·Î +2¾¿ ÇÑ´Ù
+		}       //BW ì™€ BHëŠ” ë²½ëŒì´ ì‹¤ì œ ì›€ì§ì´ëŠ” ê³µê°„ì´ë¯€ë¡œ +2ì”© í•œë‹¤
 		DrawScreen();
 		nFrame = 20;
 		score = 0;
 		bricknum = 0;
 
-		nbrick = random(sizeof(Shape) / sizeof(Shape[0]));
+		Shuffle();
+		nbrick = GetNextBrick(nbrick);
 		for (; 1;) {
 			bricknum++;
-			brick = random(sizeof(Shape) / sizeof(Shape[0]));  //º®µ¹ÀÇ ¸ğ¾çÀ» ³Ö´Â´Ù
 			brick = nbrick;
-			nbrick = random(sizeof(Shape) / sizeof(Shape[0]));
+			nbrick = GetNextBrick(nbrick);
 			DrawNext();
 
-			nx = BW / 2;      //nx,ny´Â ¶³¾îÁö°íÀÖ´Â º®µ¹ÀÇ ÁÂÇ¥°ª
+			nx = BW / 2;      //nx,nyëŠ” ë–¨ì–´ì§€ê³ ìˆëŠ” ë²½ëŒì˜ ì¢Œí‘œê°’
 			ny = 3;
 			rot = 0;
 			PrintBrick(TRUE);
@@ -128,28 +135,28 @@ void main()
 		}
 		clrscr();
 		gotoxy(30, 12); puts("G A M E  O V E R");
-		gotoxy(25, 14); puts("´Ù½Ã ½ÃÀÛÇÏ·Á¸é Y¸¦ ´©¸£¼¼¿ä");
-		if (tolower(getch()) != 'y') break;                //y¸¦ ÀÔ·Â¹ŞÀ¸¸é ´Ù½Ã ½ÃÀÛµÊ
+		gotoxy(25, 14); puts("ë‹¤ì‹œ ì‹œì‘í•˜ë ¤ë©´ Yë¥¼ ëˆ„ë¥´ì„¸ìš”");
+		if (tolower(getch()) != 'y') break;                //yë¥¼ ì…ë ¥ë°›ìœ¼ë©´ ë‹¤ì‹œ ì‹œì‘ë¨
 	}
 	setcursortype(NORMALCURSOR);
 }
 
-void DrawScreen()         //È­¸é ÀüÃ¼¸¦ ±×¸°´Ù.°ÔÀÓÆÇ°ú °ÔÀÓ ÀÌ¸§,º®±îÁö ÇÑ²¨¹ø¿¡ ±×¸°´Ù
+void DrawScreen()         //í™”ë©´ ì „ì²´ë¥¼ ê·¸ë¦°ë‹¤.ê²Œì„íŒê³¼ ê²Œì„ ì´ë¦„,ë²½ê¹Œì§€ í•œêº¼ë²ˆì— ê·¸ë¦°ë‹¤
 {
 	int x, y;
 
 	for (x = 0; x < BW + 2; x++) {
 		for (y = 0; y < BH + 2; y++) {
-			gotoxy(BX + x * 2, BY + y);       //BX¿Í BY´Â ¿©¹éÀ»ÁÜ, Æ¯¼ö¹®ÀÚ´Â µÎÄ­À» Â÷ÁöÇÏ±â¶§¹®¿¡ x*2¸¦ÇÔ
-			puts(arTile[ttype][board[x][y]]);     //°ÔÀÓ È­¸éÀ» ±×¸°´Ù(º®µ¹Á¦¿Ü)
+			gotoxy(BX + x * 2, BY + y);       //BXì™€ BYëŠ” ì—¬ë°±ì„ì¤Œ, íŠ¹ìˆ˜ë¬¸ìëŠ” ë‘ì¹¸ì„ ì°¨ì§€í•˜ê¸°ë•Œë¬¸ì— x*2ë¥¼í•¨
+			puts(arTile[ttype][board[x][y]]);     //ê²Œì„ í™”ë©´ì„ ê·¸ë¦°ë‹¤(ë²½ëŒì œì™¸)
 		}
 	}
 
-	gotoxy(35, 2); puts("´º Å×Æ®¸®½º!");                        //¼³¸íÆÇ
-	gotoxy(35, 4); puts("ÀÌµ¿ :¡ç ¡æ, È¸Àü :¡è, ³»¸² :¡é");
-	gotoxy(35, 5); puts("ÀüºÎ³»¸² : space bar, Á¾·á : ESC");
-	gotoxy(35, 6); puts("ÀÏ½ÃÁ¤Áö : P, ¸ğ¾ç¹Ù²Ş : Page up,down");
-	gotoxy(35, 7); puts("È¦µå : h ");
+	gotoxy(35, 2); puts("ë‰´ í…ŒíŠ¸ë¦¬ìŠ¤!");                        //ì„¤ëª…íŒ
+	gotoxy(35, 4); puts("ì´ë™ :â† â†’, íšŒì „ :â†‘, ë‚´ë¦¼ :â†“");
+	gotoxy(35, 5); puts("ì „ë¶€ë‚´ë¦¼ : space bar, ì¢…ë£Œ : ESC");
+	gotoxy(35, 6); puts("ì¼ì‹œì •ì§€ : P, ëª¨ì–‘ë°”ê¿ˆ : Page up,down");
+	gotoxy(35, 7); puts("í™€ë“œ : h ");
 	gotoxy(40, 19); printf("Next");
 	gotoxy(54, 19); printf("Hold");
 	DrawNext();
@@ -157,7 +164,7 @@ void DrawScreen()         //È­¸é ÀüÃ¼¸¦ ±×¸°´Ù.°ÔÀÓÆÇ°ú °ÔÀÓ ÀÌ¸§,º®±îÁö ÇÑ²¨¹ø¿
 	PrintInfo();
 }
 
-void DrawBoard()         //°ÔÀÓÆÇÀ» ±×¸²(¿ÜºÎº®°ú ¹®ÀÚ¿­ »©°í ½×¿©ÀÖ´Â º®µ¹¸¸ ±×¸²)
+void DrawBoard()         //ê²Œì„íŒì„ ê·¸ë¦¼(ì™¸ë¶€ë²½ê³¼ ë¬¸ìì—´ ë¹¼ê³  ìŒ“ì—¬ìˆëŠ” ë²½ëŒë§Œ ê·¸ë¦¼)
 {
 	int x, y;
 
@@ -169,10 +176,11 @@ void DrawBoard()         //°ÔÀÓÆÇÀ» ±×¸²(¿ÜºÎº®°ú ¹®ÀÚ¿­ »©°í ½×¿©ÀÖ´Â º®µ¹¸¸ ±×
 	}
 }
 
-BOOL ProcessKey()          // Å°ÀÔ·ÂÀ» Ã³¸®ÇÏ´Âµ¥ mainÇÔ¼öÀÇ ºÎ´ãÀ» ´ú¾îÁÖ±â À§ÇØ º°µµÀÇ ÇÔ¼ö·Î ºĞ¸®
-{                          // ÀÌµ¿ÁßÀÎ º®µ¹ÀÌ ¹Ù´Ú¿¡ ´êÀ¸¸é TRUE¸¦ ¸®ÅÏ
+BOOL ProcessKey()          // í‚¤ì…ë ¥ì„ ì²˜ë¦¬í•˜ëŠ”ë° mainí•¨ìˆ˜ì˜ ë¶€ë‹´ì„ ëœì–´ì£¼ê¸° ìœ„í•´ ë³„ë„ì˜ í•¨ìˆ˜ë¡œ ë¶„ë¦¬
+{                          // ì´ë™ì¤‘ì¸ ë²½ëŒì´ ë°”ë‹¥ì— ë‹¿ìœ¼ë©´ TRUEë¥¼ ë¦¬í„´
 	int ch, trot;
 	int xx, yy;
+	int ret = FALSE;
 
 	if (kbhit()) {
 		ch = getch();
@@ -184,6 +192,7 @@ BOOL ProcessKey()          // Å°ÀÔ·ÂÀ» Ã³¸®ÇÏ´Âµ¥ mainÇÔ¼öÀÇ ºÎ´ãÀ» ´ú¾îÁÖ±â À§Ç
 					PrintBrick(FALSE);
 					nx--;
 					PrintBrick(TRUE);
+					DropTime = clock();
 				}
 				break;
 			case RIGHT:
@@ -191,6 +200,7 @@ BOOL ProcessKey()          // Å°ÀÔ·ÂÀ» Ã³¸®ÇÏ´Âµ¥ mainÇÔ¼öÀÇ ºÎ´ãÀ» ´ú¾îÁÖ±â À§Ç
 					PrintBrick(FALSE);
 					nx++;
 					PrintBrick(TRUE);
+					DropTime = clock();
 				}
 				break;
 			case UP:
@@ -199,12 +209,11 @@ BOOL ProcessKey()          // Å°ÀÔ·ÂÀ» Ã³¸®ÇÏ´Âµ¥ mainÇÔ¼öÀÇ ºÎ´ãÀ» ´ú¾îÁÖ±â À§Ç
 					PrintBrick(FALSE);
 					rot = trot;
 					PrintBrick(TRUE);
+					DropTime = clock();
 				}
 				break;
 			case DOWN:
-				if (MoveDown()) {
-					return TRUE;
-				}
+				ret = MoveDown();
 				break;
 			case PGDN:
 				ttype++;
@@ -227,9 +236,10 @@ BOOL ProcessKey()          // Å°ÀÔ·ÂÀ» Ã³¸®ÇÏ´Âµ¥ mainÇÔ¼öÀÇ ºÎ´ãÀ» ´ú¾îÁÖ±â À§Ç
 		}
 		else {
 			switch (tolower(ch)) {
-			case 'c':          //cÀÔ·Â½Ã ºí·° È¦µå
+			case 'c':          //cì…ë ¥ì‹œ ë¸”ëŸ­ í™€ë“œ
+				if (HoldTrig == 0)
+					break;
 				HoldBrick();
-				HoldScreen();
 				DrawScreen();
 				PrintBrick(TRUE);
 				break;
@@ -241,6 +251,7 @@ BOOL ProcessKey()          // Å°ÀÔ·ÂÀ» Ã³¸®ÇÏ´Âµ¥ mainÇÔ¼öÀÇ ºÎ´ãÀ» ´ú¾îÁÖ±â À§Ç
 					nx = xx;
 					ny = yy;
 					PrintBrick(TRUE);
+					DropTime = clock();
 				}
 				break;
 			case 'x':
@@ -251,6 +262,7 @@ BOOL ProcessKey()          // Å°ÀÔ·ÂÀ» Ã³¸®ÇÏ´Âµ¥ mainÇÔ¼öÀÇ ºÎ´ãÀ» ´ú¾îÁÖ±â À§Ç
 					nx = xx;
 					ny = yy;
 					PrintBrick(TRUE);
+					DropTime = clock();
 				}
 				break;
 			case ' ':
@@ -258,11 +270,11 @@ BOOL ProcessKey()          // Å°ÀÔ·ÂÀ» Ã³¸®ÇÏ´Âµ¥ mainÇÔ¼öÀÇ ºÎ´ãÀ» ´ú¾îÁÖ±â À§Ç
 				return TRUE;
 			case ESC:
 				exit(0);
-			case 'p':          //pÀÔ·Â½Ã ÀÏ½ÃÁ¤Áö
+			case 'p':          //pì…ë ¥ì‹œ ì¼ì‹œì •ì§€
 				HoldScreen();
 				clrscr();
 				gotoxy(15, 10);
-				puts("Tetris Àá½Ã ÁßÁö. ´Ù½Ã ½ÃÀÛÇÏ·Á¸é ¾Æ¹« Å°³ª ´©¸£¼¼¿ä!");
+				puts("Tetris ì ì‹œ ì¤‘ì§€. ë‹¤ì‹œ ì‹œì‘í•˜ë ¤ë©´ ì•„ë¬´ í‚¤ë‚˜ ëˆ„ë¥´ì„¸ìš”!");
 				getch();
 				clrscr();
 				DrawScreen();
@@ -271,21 +283,21 @@ BOOL ProcessKey()          // Å°ÀÔ·ÂÀ» Ã³¸®ÇÏ´Âµ¥ mainÇÔ¼öÀÇ ºÎ´ãÀ» ´ú¾îÁÖ±â À§Ç
 			}
 		}
 	}
-	return FALSE;
+	return ret;
 }
 
-void PrintBrick(BOOL Show)     //º®µ¹À» Ãâ·ÂÇÏ°Å³ª »èÁ¦ÇÏ´Âµ¥ ÀÌµ¿ÁßÀÎ º®µ¹À» ´ë»ó·Î ÇÏ¹Ç·Î Àü¿ªº¯¼ö brick,rot,nx,ny°ª ÂüÁ¶
+void PrintBrick(BOOL Show)     //ë²½ëŒì„ ì¶œë ¥í•˜ê±°ë‚˜ ì‚­ì œí•˜ëŠ”ë° ì´ë™ì¤‘ì¸ ë²½ëŒì„ ëŒ€ìƒë¡œ í•˜ë¯€ë¡œ ì „ì—­ë³€ìˆ˜ brick,rot,nx,nyê°’ ì°¸ì¡°
 {
 	int i;
-
+	double * p = &i;
 	for (i = 0; i < 4; i++) {
 		gotoxy(BX + (Shape[brick][rot][i].x + nx) * 2, BY + Shape[brick][rot][i].y + ny);
 		puts(arTile[ttype][Show ? BRICK : EMPTY]);
 	}
 }
 
-int GetAround(int x, int y, int b, int r)   //º®µ¹ ÁÖ¸é¿¡ ¹«¾ùÀÌ ÀÖ´ÂÁö °Ë»çÇÏ¿© º®µ¹ÀÇ ÀÌµ¿ ¹× È¸Àü°¡´É¼º Á¶»ç
-{                                       //ÀÌµ¿ÁßÀÎ º®µ¹ÀÇ ÁÖº¯À» Á¶»çÇÏ´Â °ÍÀÌ ¾Æ´Ï¹Ç·Î ÀÎ¼ö·Î Àü´ŞµÈ À§Ä¡ÀÇ º®µ¹¸ğ¾çÀ» ÂüÁ¶ÇÑ´Ù
+int GetAround(int x, int y, int b, int r)   //ë²½ëŒ ì£¼ë©´ì— ë¬´ì—‡ì´ ìˆëŠ”ì§€ ê²€ì‚¬í•˜ì—¬ ë²½ëŒì˜ ì´ë™ ë° íšŒì „ê°€ëŠ¥ì„± ì¡°ì‚¬
+{                                       //ì´ë™ì¤‘ì¸ ë²½ëŒì˜ ì£¼ë³€ì„ ì¡°ì‚¬í•˜ëŠ” ê²ƒì´ ì•„ë‹ˆë¯€ë¡œ ì¸ìˆ˜ë¡œ ì „ë‹¬ëœ ìœ„ì¹˜ì˜ ë²½ëŒëª¨ì–‘ì„ ì°¸ì¡°í•œë‹¤
 	int i, k = EMPTY;
 
 	for (i = 0; i < 4; i++) {
@@ -297,13 +309,12 @@ int GetAround(int x, int y, int b, int r)   //º®µ¹ ÁÖ¸é¿¡ ¹«¾ùÀÌ ÀÖ´ÂÁö °Ë»çÇÏ¿©
 int GetAroundSpin(int x, int y, int b, int r, int* retx, int* rety)
 {
 	int i;
-	for (int j = 0; j < 9; j++) {
+	for (int j = 0; j < 10; j++) {
 		int k = EMPTY;
 		int xx = spinCenter[j][0] + x;
 		int yy = spinCenter[j][1] + y;
-		for (i = 0; i < 4; i++) {
+		for (i = 0; i < 4; i++)
 			k = max(k, board[xx + Shape[b][r][i].x][yy + Shape[b][r][i].y]);
-		}
 		if (k == EMPTY) {
 			*retx = xx;
 			*rety = yy;
@@ -313,20 +324,23 @@ int GetAroundSpin(int x, int y, int b, int r, int* retx, int* rety)
 	return !EMPTY;
 }
 
-BOOL MoveDown()   //º®µ¹À» ÇÑÄ­ ¾Æ·¡·Î ÀÌµ¿½ÃÅ²´Ù.
+BOOL MoveDown()   //ë²½ëŒì„ í•œì¹¸ ì•„ë˜ë¡œ ì´ë™ì‹œí‚¨ë‹¤.
 {
 	if (GetAround(nx, ny + 1, brick, rot) != EMPTY) {
+		if (DropTime + CLOCKS_PER_SEC / 2 >= clock())
+			return FALSE;
 		HoldTrig = 1;
 		TestFull();
-		return TRUE;                 //¸¸¾à ¹Ù´Ú¿¡ ´ê¾Ò´Ù¸é TestFull ÇÔ¼ö¸¦ È£ÃâÇÑ ÈÄ TRUE¸¦ ¸®ÅÏÇÑ´Ù.
+		return TRUE;//ë°”ë‹¥ì— ë‹¿ì•˜ë‹¤ë©´ TestFull() í•œ í›„ TRUEë¥¼ ë¦¬í„´í•œë‹¤.
 	}
 	PrintBrick(FALSE);
 	ny++;
+	DropTime = clock();
 	PrintBrick(TRUE);
 	return FALSE;
 }
 
-void TestFull()              //¼öÆòÀ¸·Î ´Ù Ã¤¿öÁø ÁÙÀ» Ã£¾Æ »èÁ¦ÇÑ´Ù
+void TestFull()              //ìˆ˜í‰ìœ¼ë¡œ ë‹¤ ì±„ì›Œì§„ ì¤„ì„ ì°¾ì•„ ì‚­ì œí•œë‹¤
 {
 	int i, x, y, ty;
 	int count = 0;
@@ -355,7 +369,7 @@ void TestFull()              //¼öÆòÀ¸·Î ´Ù Ã¤¿öÁø ÁÙÀ» Ã£¾Æ »èÁ¦ÇÑ´Ù
 	PrintInfo();
 }
 
-void DrawNext() //´ÙÀ½ ºí·° º¸±â 
+void DrawNext() //ë‹¤ìŒ ë¸”ëŸ­ ë³´ê¸° 
 {
 	int x, y, i;
 
@@ -370,52 +384,46 @@ void DrawNext() //´ÙÀ½ ºí·° º¸±â
 	for (i = 0; i < 4; i++) {
 		gotoxy(40 + (Shape[nbrick][0][i].x) * 2, 15 + Shape[nbrick][0][i].y);
 		puts(arTile[ttype][BRICK]);
-
 	}
-
-
 }
-void PrintInfo()          //Á¡¼ö¿Í º®µ¹ÀÇ°¹¼ö¸¦ ³ªÅ¸³»´Â ÇÔ¼ö
+void PrintInfo()          //ì ìˆ˜ì™€ ë²½ëŒì˜ê°¯ìˆ˜ë¥¼ ë‚˜íƒ€ë‚´ëŠ” í•¨ìˆ˜
 {
-	gotoxy(50, 9); printf("Á¡¼ö : %d     ", score);
-	gotoxy(50, 10); printf("º®µ¹ : %d °³  ", bricknum);
+	gotoxy(50, 9); printf("ì ìˆ˜ : %d     ", score);
+	gotoxy(50, 10); printf("ë²½ëŒ : %d ê°œ  ", bricknum);
 }
 
-void HoldBrick() { //ºí·°À» È¦µåÇÑ´Ù
-	if (HoldTrig == 1) {
-		int temp = 0, i = 0;
-		if (hbrick == 8)
-		{
-			temp = brick;
-			hbrick = random(sizeof(Shape) / sizeof(Shape[0]));
-			brick = hbrick;
-			hbrick = temp;
+void HoldBrick() { //ë¸”ëŸ­ì„ í™€ë“œí•œë‹¤
+	int temp = 0, i = 0;
+	HoldTrig = 0;
+	if (hbrick == 8)
+	{
+		hbrick = brick;
+		brick = nbrick;
+		nbrick = GetNextBrick(nbrick);
 
-			nx = BW / 2;
-			ny = 3;
-			for (i = 0; i < 4; i++) {
-				gotoxy(BX + (Shape[brick][rot][i].x + nx) * 2, BY + Shape[brick][rot][i].y + ny);
-				puts(arTile[ttype][BRICK]);
-			}
+		nx = BW / 2;
+		ny = 3;
+		for (i = 0; i < 4; i++) {
+			gotoxy(BX + (Shape[brick][rot][i].x + nx) * 2, BY + Shape[brick][rot][i].y + ny);
+			puts(arTile[ttype][BRICK]);
 		}
-		else
-		{
-			temp = brick;
-			brick = hbrick;
-			hbrick = temp;
+	}
+	else
+	{
+		temp = brick;
+		brick = hbrick;
+		hbrick = temp;
 
-			nx = BW / 2;
-			ny = 3;
-			for (i = 0; i < 4; i++) {
-				gotoxy(BX + (Shape[brick][rot][i].x + nx) * 2, BY + Shape[brick][rot][i].y + ny);
-				puts(arTile[ttype][BRICK]);
-			}
+		nx = BW / 2;
+		ny = 3;
+		for (i = 0; i < 4; i++) {
+			gotoxy(BX + (Shape[brick][rot][i].x + nx) * 2, BY + Shape[brick][rot][i].y + ny);
+			puts(arTile[ttype][BRICK]);
 		}
-		HoldTrig = 0;
 	}
 }
 
-void HoldScreen() {        //È­¸é¿¡ º¸¿©Áü
+void HoldScreen() {        //í™”ë©´ì— ë³´ì—¬ì§
 	int x, y, i;
 
 	for (x = 50; x <= 60; x += 2) {
@@ -433,4 +441,23 @@ void HoldScreen() {        //È­¸é¿¡ º¸¿©Áü
 		}
 	}
 
+}
+
+void Shuffle() {
+	//Fisherâ€“Yates shuffle ì•Œê³ ë¦¬ì¦˜
+	int* start = box;
+	for (int i = 0; i < 7; i++) {
+		swap(start, start + random(7 - i));
+		start++;
+	}
+}
+
+int GetNextBrick(int previousBrick) {
+	if (previousBrick == box[6]) {
+		Shuffle();
+		return box[0];
+	}
+	int i = 0;
+	while (box[i++] != previousBrick);
+	return box[i];
 }
