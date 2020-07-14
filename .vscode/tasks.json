@@ -1,0 +1,56 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "Test",
+			"command": "start Exe\\Main.exe",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": {
+				"kind" : "test",
+				"isDefault": true
+			}
+		},
+		{
+			"type": "shell",
+			"label": "Build",
+			"command": "cl.exe",
+			"args": [
+				"/Zi",
+				"/EHsc",
+				"/Fe:",
+				"Exe\\${fileBasenameNoExtension}.exe",
+				"/Fo:",
+				"Obj\\${fileBasename}.obj",
+				"${file}"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"dependsOn": [
+				"CreateDir"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": {
+				"kind" : "build",
+				"isDefault": true
+			}
+		},
+		{
+			"type": "shell",
+			"label": "CreateDir",
+			"command": "New-Item Exe -ItemType directory -Force;New-Item Obj -ItemType directory -Force",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": ["$msCompile"]
+		}
+	]
+}
